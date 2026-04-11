@@ -20,16 +20,18 @@ int main(int argc, char **argv) {
 
     // Variable Declaraction
     int port_number, server_fd;
+    
     struct sockaddr_in addr;
 
 
     // Check correct number of command line arguments
-    if (argc != 2) {
-        printf("Wrong amount of command line arguments used. \n Usage: ./server {PORT_NUMBER} \n");
+    if (argc != 3) {
+        printf("Wrong of command line argument. \n Usage: ./dfs {SEVER_DIRECTORY} {PORT NUMBER} \n");
         return -1;
     }
 
-    port_number = atoi(argv[1]); // Read port number form command line arguments
+    char* server_dir = argv[1]; // Read path to server directory from command line argument
+    port_number = atoi(argv[2]); // Read port number from command line arguments
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0); // Open theh socket
     if (server_fd == -1) { printf("Error opening socket. \n"); return -1; } // Check socket was opened successfully
@@ -67,7 +69,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        // Create thread here
+        // Create thread
         pthread_t tid;
         int *pclient = malloc(sizeof(int));
         *pclient = client_fd;
@@ -78,10 +80,6 @@ int main(int argc, char **argv) {
     close(server_fd);
     return 0;
 }
-
-
-
-
 
 
 void *handle_client_thread(void *arg) {
