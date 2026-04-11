@@ -13,8 +13,9 @@
 #include <netdb.h> 
 #include <errno.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
 
-#define BUFSIZE 16384 // 8192
+#define BUFSIZE 4096
 
 /* 
  * error - wrapper for perror
@@ -30,94 +31,119 @@ void receive_file(char* filename, int sockfd, struct sockaddr_in serveraddr, int
 
 
 int main(int argc, char **argv) {
-    int sockfd, portno, n;
-    int serverlen;
-    struct sockaddr_in serveraddr;
-    struct hostent *server;
-    char *hostname;
-    char buf[BUFSIZE];
-    char command[7];
-    char filename[48];
-    int words_read;
+
+    /* Variable declaraton */
+    struct sockaddr_in server_addr;
+    int client_fd;
+    char *ip_address = "127.0.0.1";
+    int PORT = 10001;
+    char *request_type;
+    char *filename;
+    char command[512];
+    char buffer[BUFSIZE];
+    int bytes_received;
+    
 
     /* check command line arguments */
-    if (argc != 3) {
-       fprintf(stderr,"usage: %s <hostname> <port>\n", argv[0]);
-       exit(0);
+    if (argc != 3) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
+    request_type = argv[1];
+    filename = argv[2];
+
+    /* open socket */
+    client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_fd == -1) { printf("Error opening socket. \n"); return -1; } // Check socket was opened successfully
+
+    /* Set server address */
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    inet_pton(AF_INET, ip_address, &server_addr.sin_addr); // connect to localhost
+
+    /* Connect to server */
+    if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        printf("Error connecting socket. \n"); return -1;
     }
-    hostname = argv[1];
-    portno = atoi(argv[2]);
 
-    /* socket: create the socket */
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) 
-        error("ERROR opening socket");
+    /* Create command */
+    snprintf(command, sizeof(command), "%s %s", request_type, filename);
 
-    /* gethostbyname: get the server's DNS entry */
-    server = gethostbyname(hostname);
-    if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
-        exit(0);
+    /* send command */
+    send(client_fd, command, strlen(command), 0);
+
+    /* Receive response */
+    bytes_received = recv(client_fd, buffer, BUFSIZE-1, 0);
+    if (bytes_received > 0) {
+        printf("%s\n", buffer);
     }
+    
+    close(client_fd);
+    return 1;
 
-    /* build the server's Internet address */
-    bzero((char *) &serveraddr, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, 
-	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    serveraddr.sin_port = htons(portno);
 
-    /* get a message from the user */
-    while(1) {
-        bzero(buf, BUFSIZE);
-        bzero(command, 7);
-        bzero(filename, 48);
-        printf("Please enter msg: ");
-        fgets(buf, BUFSIZE, stdin);
+    // /* gethostbyname: get the server's DNS entry */
+    // server = gethostbyname(hostname);
+    // if (server == NULL) {
+    //     fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+    //     exit(0);
+    // }
 
-        /* send the message to the server */
-        serverlen = sizeof(serveraddr);
+    // /* build the server's Internet address */
+    // bzero((char *) &serveraddr, sizeof(serveraddr));
+    // serveraddr.sin_family = AF_INET;
+    // bcopy((char *)server->h_addr, 
+	//   (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+    // serveraddr.sin_port = htons(portno);
 
-        /* Trim the inputs return/newline*/
-        buf[strcspn(buf, "\r\n")] = '\0';
-        words_read = sscanf(buf, "%6s %47s", command, filename); // Separate command and filename
+    // /* get a message from the user */
+    // while(1) {
+    //     bzero(buf, BUFSIZE);
+    //     bzero(command, 7);
+    //     bzero(filename, 48);
+    //     printf("Please enter msg: ");
+    //     fgets(buf, BUFSIZE, stdin);
 
-        if (strcmp(command, "exit") == 0) {
-            n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-            if (n < 0) 
-            error("ERROR in sendto");
-            close(sockfd);
-            exit(0);
-        } else if (strcmp(command, "get") == 0) {
+    //     /* send the message to the server */
+    //     serverlen = sizeof(serveraddr);
 
-            /* Check that file name was included with the command*/
-            if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
+    //     /* Trim the inputs return/newline*/
+    //     buf[strcspn(buf, "\r\n")] = '\0';
+    //     words_read = sscanf(buf, "%6s %47s", command, filename); // Separate command and filename
 
-            n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-            if (n < 0) error("ERROR in sendto");
+    //     if (strcmp(command, "exit") == 0) {
+    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    //         if (n < 0) 
+    //         error("ERROR in sendto");
+    //         close(sockfd);
+    //         exit(0);
+    //     } else if (strcmp(command, "get") == 0) {
 
-            receive_file(filename, sockfd, serveraddr, serverlen);
-            continue;
+    //         /* Check that file name was included with the command*/
+    //         if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
 
-        } else if (strcmp(command, "put") == 0) {
+    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    //         if (n < 0) error("ERROR in sendto");
 
-            /* Check that file name was included with the command*/
-            if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
-            n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-            if (n < 0) error("ERROR in sendto");
-            send_file(filename, sockfd, serverlen, serveraddr);
-            continue;
+    //         receive_file(filename, sockfd, serveraddr, serverlen);
+    //         continue;
 
-        } else {
-            n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-            if (n < 0) error("ERROR in sendto");
-        }
+    //     } else if (strcmp(command, "put") == 0) {
 
-        n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
-        if (n < 0) error("ERROR in recvfrom");
-        printf("Echo from server: %s", buf);
-    }
-    return 0;
+    //         /* Check that file name was included with the command*/
+    //         if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
+    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    //         if (n < 0) error("ERROR in sendto");
+    //         send_file(filename, sockfd, serverlen, serveraddr);
+    //         continue;
+
+    //     } else {
+    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    //         if (n < 0) error("ERROR in sendto");
+    //     }
+
+    //     n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
+    //     if (n < 0) error("ERROR in recvfrom");
+    //     printf("Echo from server: %s", buf);
+    // }
+    // return 0;
 }
 
 
