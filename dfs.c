@@ -20,9 +20,7 @@ int main(int argc, char **argv) {
 
     // Variable Declaraction
     int port_number, server_fd;
-    
     struct sockaddr_in addr;
-
 
     // Check correct number of command line arguments
     if (argc != 3) {
@@ -62,14 +60,14 @@ int main(int argc, char **argv) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
-        // 1. Accept a client
+        /* Accept client */
         int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
         if (client_fd < 0) {
             printf("Error in client accept.");
             continue;
         }
 
-        // Create thread
+        /* Create thread */
         pthread_t tid;
         int *pclient = malloc(sizeof(int));
         *pclient = client_fd;
@@ -83,12 +81,17 @@ int main(int argc, char **argv) {
 
 
 void *handle_client_thread(void *arg) {
+
+    /* Variable declaraion */
+    struct stat info;
+    char command[8];
+    char filename[256]; filename[0] = '\0'; // Default to empty in case there's no filename for list
+
+    /* Unpack the arguments */
     int client_fd = *(int *)arg;
     free(arg);
-
-    struct stat info;
-
-    // 2. Receive data
+    
+    /* Receive data */
     char buffer[4096];
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if (bytes_received < 0) {
@@ -97,71 +100,86 @@ void *handle_client_thread(void *arg) {
         return NULL;
     }
 
-    buffer[bytes_received] = '\0'; // 3. Null-terminate so we can treat it like a string
+    /* Null-terminate buffer so we can treat it like a string */
+    buffer[bytes_received] = '\0';
 
-    // 4. Find the end of the first line
-    char *line_end = strstr(buffer, "\r\n");
-    if (line_end != NULL) {
-        *line_end = '\0';  // cut string at end of first line
-    }
+    /* Separate command and filename */
+    int count = sscanf(buffer, "%s %s", command, filename);
 
-    // 5. Print first line
-    printf("Request line: %s\n", buffer);
-    
-    char method[16];
-    char uri[256];
-    char version[16];
-    int parts = sscanf(buffer, "%15s %255s %15s", method, uri, version);
+    /* Print command and filename*/
+    printf("Command: %s\n File name: %s\n", command, filename);
 
-    printf("Uri: %s \n", uri);
-
-    if (parts != 3) {
-        char *body = "The request could not be parsed or is malformed.\n";
-        send_response(client_fd, 400, body, "text/plain");
-    } else if (strcmp(method, "GET")) { // strcmp returns 0 if they are equal
-        char *body = "A method other than GET was requested.\n";
-        send_response(client_fd, 405, body, "text/plain");
-    } else if (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0")) {
-        char *body = "An HTTP version other than 1.1 or 1.0 was requested.\n";
-        send_response(client_fd, 505, body, "text/plain");
-    
+    /* Select action according to command */
+    if (strcmp(command, "get") == 0) {
+        printf("Command received is get\n");
+    } else if (strcmp(command, "put") == 0) {
+        printf("Command received is put\n");
+    } else if (strcmp(command, "list") == 0) {
+        printf("Command received is list\n");
     } else {
-        // Create the path
-        char path[512];
-        snprintf(path, sizeof(path), "./www%s", uri);
-
-        // Check if the path is a folder
-        if (stat(path, &info) == 0 && S_ISDIR(info.st_mode)) {
-            
-            strncat(path, "index.html", sizeof(path) - strlen(path) - 1); // Append index.html to path
-
-            FILE *testfp = fopen(path, "rb");
-            if (testfp == NULL) { // File doesn't exists so we change path to index.htm try bellow
-                char *p = strstr(path, "index.html"); // Remove index.html from path
-                if (p != NULL) *p = '\0';
-                strncat(path, "index.htm", sizeof(path) - strlen(path) - 1); // Append index.htm to path
-            } else {
-                fclose(testfp); // File exists so we close this test since we are going to open it bellow again
-            }
-        }
-
-        // Check if the file is accessible/exists
-        FILE *fp = fopen(path, "rb");
-        if (fp == NULL) {
-            if (errno == EACCES) {
-                char *body = "The requested file cannot be access due to a file permission issue.\n";
-                send_response(client_fd, 403, body, "text/plain");
-            } else {
-                char *body = "Error 404. The requested file canont be found in the document tree.\n";
-                send_response(client_fd, 404, body, "text/plain");
-            }
-        } else {
-            send_file(client_fd, fp, path);
-            fclose(fp);
-        }
+        char *body = "Error 400. Command not supported.\n";
+        send_response(client_fd, 400, body, "text/plain");
+        send(client_fd, body, strlen(body), 0); // Send response
     }
-    close(client_fd); // 6. Close client
+    close(client_fd);
     return NULL;
+
+
+    
+    // char method[16];
+    // char uri[256];
+    // char version[16];
+    // int parts = sscanf(buffer, "%15s %255s %15s", method, uri, version);
+
+    // printf("Uri: %s \n", uri);
+
+    // if (parts != 3) {
+    //     char *body = "The request could not be parsed or is malformed.\n";
+    //     send_response(client_fd, 400, body, "text/plain");
+    // } else if (strcmp(method, "GET")) { // strcmp returns 0 if they are equal
+    //     char *body = "A method other than GET was requested.\n";
+    //     send_response(client_fd, 405, body, "text/plain");
+    // } else if (strcmp(version, "HTTP/1.1") && strcmp(version, "HTTP/1.0")) {
+    //     char *body = "An HTTP version other than 1.1 or 1.0 was requested.\n";
+    //     send_response(client_fd, 505, body, "text/plain");
+    
+    // } else {
+    //     // Create the path
+    //     char path[512];
+    //     snprintf(path, sizeof(path), "./www%s", uri);
+
+    //     // Check if the path is a folder
+    //     if (stat(path, &info) == 0 && S_ISDIR(info.st_mode)) {
+            
+    //         strncat(path, "index.html", sizeof(path) - strlen(path) - 1); // Append index.html to path
+
+    //         FILE *testfp = fopen(path, "rb");
+    //         if (testfp == NULL) { // File doesn't exists so we change path to index.htm try bellow
+    //             char *p = strstr(path, "index.html"); // Remove index.html from path
+    //             if (p != NULL) *p = '\0';
+    //             strncat(path, "index.htm", sizeof(path) - strlen(path) - 1); // Append index.htm to path
+    //         } else {
+    //             fclose(testfp); // File exists so we close this test since we are going to open it bellow again
+    //         }
+    //     }
+
+    //     // Check if the file is accessible/exists
+    //     FILE *fp = fopen(path, "rb");
+    //     if (fp == NULL) {
+    //         if (errno == EACCES) {
+    //             char *body = "The requested file cannot be access due to a file permission issue.\n";
+    //             send_response(client_fd, 403, body, "text/plain");
+    //         } else {
+    //             char *body = "Error 404. The requested file canont be found in the document tree.\n";
+    //             send_response(client_fd, 404, body, "text/plain");
+    //         }
+    //     } else {
+    //         send_file(client_fd, fp, path);
+    //         fclose(fp);
+    //     }
+    // }
+    // close(client_fd); // 6. Close client
+    // return NULL;
 }
 
 
