@@ -226,7 +226,7 @@ void get_request(int client_fd, char* server_dir, char* filename) {
             if (!fp) { printf("Error opening file: %s\n", path); continue; }
 
             /* send header: "partname size\n" */
-            sprintf(header, "%s %lld\n", entry->d_name, st.st_size);
+            sprintf(header, "%s %ld\n", entry->d_name, st.st_size);
             send(client_fd, header, strlen(header), 0);
 
             /* read and send file */

@@ -44,9 +44,9 @@ int main(int argc, char **argv) {
 
     
     /* check command line arguments */
-    if (argc != 3) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
+    if (argc < 3) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
     request_type = argv[1];
-    filename = argv[2];
+    filename = (argc >= 3) ? argv[2] : NULL;
 
     /* get ports from config file */
     n_ports = get_ports(ports);
@@ -194,9 +194,13 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
                 actual_size = part_size;
             }
 
-            /* send header */
+            /* clean string */
             char *dot = strrchr(filename, '.'); // find the last '.'
             if (dot) *dot = '\0';               // replace it with null terminator
+            char *base = strrchr(filename, '/');
+            base = base ? base +1 : filename;
+
+            /* send header */
             sprintf(header, "%s_%d %ld\n", filename, parts[j]+1, actual_size);
             send(sock_fds[i], header, strlen(header), 0);
 
@@ -225,12 +229,15 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     /* variable declaration */
     char command[1024];
     char header[1024];
-    char part_name[256];
+    char part_name[1024];
     char buffer[BUFSIZE];
     long part_size;
 
+    char *base = strrchr(filename, '/');
+    base = base ? base +1 : filename;
+
     /* send get request pakcet to all servers */
-    sprintf(command, "get %s\n", filename);
+    sprintf(command, "get %s\n", base);
     for (int i = 0; i < n_servers; i++) {
         send(sock_fds[i], command, strlen(command), 0);
     }
@@ -264,18 +271,15 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     }
 
     /* create final file */
-    FILE *fp = fopen(filename, "ab");
+    FILE *fp = fopen(base, "ab");
     if (!fp) { printf("Error opening main final file: %s\n", filename); return; }
 
     /* strip extension from filename */
-    char base[256];
-    strncpy(base, filename, sizeof(base));
-    char *dot = strrchr(base, '.');
+    char *dot = strrchr(base, '.'); // find the last '.'
     if (dot) *dot = '\0';
 
     for (int j = 0; j < n_servers; j++) {
 
-        char part_name[256];
         sprintf(part_name, "%s_%d", base, j+1);
 
         /* open part file */
