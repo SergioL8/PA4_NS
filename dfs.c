@@ -233,6 +233,7 @@ void get_request(int client_fd, char* server_dir, char* filename) {
             while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
                 send(client_fd, buffer, bytes_read, 0);
             }
+            flcose(fp);
         }
     }
     closedir(dir);

@@ -271,20 +271,23 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     }
 
     /* create final file */
-    FILE *fp = fopen(base, "ab");
+    FILE *fp = fopen(base, "wb");
     if (!fp) { printf("Error opening main final file: %s\n", filename); return; }
 
     /* strip extension from filename */
     char *dot = strrchr(base, '.'); // find the last '.'
     if (dot) *dot = '\0';
 
-    for (int j = 0; j < n_servers; j++) {
+    for (int j = 1; ; j++) {
 
-        sprintf(part_name, "%s_%d", base, j+1);
+        sprintf(part_name, "%s_%d", base, j);
 
         /* open part file */
         FILE *pfp = fopen(part_name, "rb");
-        if (!pfp) { printf("Error opening part file: %s\n", part_name); return; }
+        if (!pfp) {
+            printf("Error opening part file: %s\n", part_name);
+            break;
+        }
 
         int bytes_read = 0;
         while((bytes_read = fread(buffer, 1, BUFSIZE, pfp)) > 0) {
