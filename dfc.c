@@ -23,10 +23,11 @@
 int get_ports(int ports[MAX_N_SERVERS]);
 void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
 int open_socket(char* ip, int port);
-void get_request();
+void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
 void list_request();
 // int hash_filename(char *filename);
 unsigned long hash_filename(char *filename);
+int recv_line(int fd, char *buf, int maxlen);
 
 
 int main(int argc, char **argv) {
@@ -58,13 +59,10 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(request_type, "put") == 0) {
-        if (connected_servers < n_ports) {
-            printf("%s put failed\n", filename);
-            return 1;
-        }
+        if (connected_servers < n_ports) { printf("%s put failed\n", filename); return 1; }
         put_request(sock_fds, filename, connected_servers);
     } else if (strcmp(request_type, "get") == 0) {
-        get_request();
+        get_request(sock_fds, filename, connected_servers);
     } else if (strcmp(request_type, "list") == 0) {
         list_request();
     } else {
@@ -131,6 +129,20 @@ unsigned long hash_filename(char *filename) {
 }
 
 
+int recv_line(int fd, char *buf, int maxlen) {
+    int idx = 0;
+    char ch;
+    while (idx < maxlen - 1) {
+        int n = recv(fd, &ch, 1, 0);
+        if (n <= 0) return n;   // 0 = closed, -1 = error
+        if (ch == '\n') break;  // stop at delimiter, don't store it
+        buf[idx++] = ch;
+    }
+    buf[idx] = '\0';
+    return idx;
+}
+
+
 void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 
     /* variable declaration */
@@ -153,7 +165,7 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     
     /* open file */
     FILE *fp = fopen(filename, "rb");
-    if (!fp) { printf("Error opening file\n"); return; }
+    if (!fp) { printf("Error opening file in put\n"); return; }
 
     /* get the file size and part size */
     fseek(fp, 0, SEEK_END);
@@ -163,7 +175,6 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 
     /* hash filname */
     hash = hash_filename(filename);
-    // hash = 3
 
     /* iterate over every server */
     for (int i = 0; i < n_servers; i++) {
@@ -209,7 +220,76 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 }
 
 
-void get_request() {
+void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
+
+    /* variable declaration */
+    char command[1024];
+    char header[1024];
+    char part_name[256];
+    char buffer[BUFSIZE];
+    long part_size;
+
+    /* send get request pakcet to all servers */
+    sprintf(command, "get %s\n", filename);
+    for (int i = 0; i < n_servers; i++) {
+        send(sock_fds[i], command, strlen(command), 0);
+    }
+
+    /* receive parts from each server */
+    for (int i = 0; i < n_servers; i++) {
+
+        /* keep reading headers */
+        while(recv_line(sock_fds[i], header, sizeof(header)) > 0) {
+
+            /* divide part_name and part size */
+            sscanf(header, "%s %ld", part_name, &part_size);
+
+            /* open file to write this part */
+            FILE *fp = fopen(part_name, "wb");
+            if (!fp) { printf("Error opening file in while: %s\n", part_name); break; }
+
+            /* receive exactly part_size bytes */
+            long bytes_received = 0;
+            while (bytes_received < part_size) {
+                long remaining = part_size - bytes_received;
+                int to_read = (remaining < BUFSIZE) ? remaining : BUFSIZE;
+                int n = recv(sock_fds[i], buffer, to_read, 0);
+                if (n <= 0) break;
+                fwrite(buffer, 1, n, fp);
+                bytes_received += n;
+            }
+            fclose(fp);
+        }
+        close(sock_fds[i]);
+    }
+
+    /* create final file */
+    FILE *fp = fopen(filename, "ab");
+    if (!fp) { printf("Error opening main final file: %s\n", filename); return; }
+
+    /* strip extension from filename */
+    char base[256];
+    strncpy(base, filename, sizeof(base));
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = '\0';
+
+    for (int j = 0; j < n_servers; j++) {
+
+        char part_name[256];
+        sprintf(part_name, "%s_%d", base, j+1);
+
+        /* open part file */
+        FILE *pfp = fopen(part_name, "rb");
+        if (!pfp) { printf("Error opening part file: %s\n", part_name); return; }
+
+        int bytes_read = 0;
+        while((bytes_read = fread(buffer, 1, BUFSIZE, pfp)) > 0) {
+            fwrite(buffer, 1, bytes_read, fp);
+        }
+        fclose(pfp);
+        remove(part_name);
+    }
+    fclose(fp);
     return;
 }
 

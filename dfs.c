@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <dirent.h>
 
 #define BUFSIZE 4096
 
@@ -21,6 +22,7 @@ typedef struct {
 
 void *handle_client_thread(void *arg);
 void put_request(int client_fd, char* server_dir);
+void get_request(int client_fd, char* server_dir, char* filename);
 int recv_line(int fd, char *buf, int maxlen);
 
 
@@ -88,6 +90,19 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+int recv_line(int fd, char *buf, int maxlen) {
+    int idx = 0;
+    char ch;
+    while (idx < maxlen - 1) {
+        int n = recv(fd, &ch, 1, 0);
+        if (n <= 0) return n;   // 0 = closed, -1 = error
+        if (ch == '\n') break;  // stop at delimiter, don't store it
+        buf[idx++] = ch;
+    }
+    buf[idx] = '\0';
+    return idx;
+}
+
 
 void *handle_client_thread(void *arg) {
 
@@ -114,11 +129,10 @@ void *handle_client_thread(void *arg) {
     sscanf(buffer, "%s %s", command, filename);
 
     /* Select action according to command */
-    if (strcmp(command, "get") == 0) {
-        char *body = "Command received is get\n";
-        send(client_fd, body, strlen(body), 0); // Send response
-    } else if (strcmp(command, "put") == 0) {
+    if (strcmp(command, "put") == 0) {
         put_request(client_fd, server_dir);
+    } else if (strcmp(command, "get") == 0) {
+        get_request(client_fd, server_dir, filename);
     } else if (strcmp(command, "list") == 0) {
         char *body = "Command received is list\n";
         send(client_fd, body, strlen(body), 0); // Send response
@@ -180,15 +194,46 @@ void put_request(int client_fd, char* server_dir) {
 }
 
 
-int recv_line(int fd, char *buf, int maxlen) {
-    int idx = 0;
-    char ch;
-    while (idx < maxlen - 1) {
-        int n = recv(fd, &ch, 1, 0);
-        if (n <= 0) return n;   // 0 = closed, -1 = error
-        if (ch == '\n') break;  // stop at delimiter, don't store it
-        buf[idx++] = ch;
+
+void get_request(int client_fd, char* server_dir, char* filename) {
+
+    /* variable declaration */
+    char header[1024];
+    char path[1024];
+    struct stat st;
+    char buffer[BUFSIZE];
+    long bytes_read = 0;
+
+    /* remove extension */
+    char *dot = strrchr(filename, '.'); // find the last '.'
+    if (dot) *dot = '\0';               // replace it with null terminator
+
+    /* open directory*/
+    DIR *dir = opendir(server_dir);
+    if (!dir) { printf("Error opening directory: %s\n", server_dir); return; }
+
+    /* loop over the directory */
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, filename, strlen(filename)) == 0) {
+
+            /* Create path and open with stat*/
+            sprintf(path, "%s/%s", server_dir, entry->d_name);
+            stat(path, &st);
+
+            /* open file */
+            FILE *fp = fopen(path, "rb");
+            if (!fp) { printf("Error opening file: %s\n", path); continue; }
+
+            /* send header: "partname size\n" */
+            sprintf(header, "%s %lld\n", entry->d_name, st.st_size);
+            send(client_fd, header, strlen(header), 0);
+
+            /* read and send file */
+            while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
+                send(client_fd, buffer, bytes_read, 0);
+            }
+        }
     }
-    buf[idx] = '\0';
-    return idx;
+    closedir(dir);
 }
