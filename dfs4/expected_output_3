@@ -1,0 +1,28 @@
+
+
+=== Test 3: 2 servers (terminate server 2) ===
+[*] Terminating dfs2 ...
+    - dfs2 terminated
+[*] Running './dfc list' (Test 3) ...
+---- ./dfc list output (Test 3) ----
+apple_ex.png
+wine3.jpg
+---------------------------------
+[*] Downloading (GET) ...
+[*] Checking hashes (Test 3)...
+    - wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
+
+=== Test 4: 1 server (terminate server 3) ===
+[*] Terminating dfs3 ...
+    - dfs3 terminated
+[*] Running './dfc list' (Test 4) (expect <filename> [incomplete]) ...
+---- ./dfc list output (Test 4) ----
+apple_ex.png (incomplete)
+wine3.jpg (incomplete)
+---------------------------------
+[*] Attempting GET under 1-server scenario (expect '<filename> is incomplete') ...
+wine3.jpg is incomplete
+apple_ex.png is incomplete
+
+=== Test 5: Multiple DFCs (4 

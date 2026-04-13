@@ -14,40 +14,88 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <math.h>
+// #include <openssl/md5.h>
 
 #define BUFSIZE 4096
+#define MAX_N_SERVERS 10
 
-/* 
- * error - wrapper for perror
- */
-void error(char *msg) {
-    perror(msg);
-    exit(0);
-}
-
-
-void send_file(char* filename, int sockfd, int clientlen, struct sockaddr_in clientaddr);
-void receive_file(char* filename, int sockfd, struct sockaddr_in serveraddr, int serverlen);
+int get_ports(int ports[MAX_N_SERVERS]);
+void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
+int open_socket(char* ip, int port);
+void get_request();
+void list_request();
+// int hash_filename(char *filename);
+unsigned long hash_filename(char *filename);
 
 
 int main(int argc, char **argv) {
 
     /* Variable declaraton */
-    struct sockaddr_in server_addr;
-    int client_fd;
     char *ip_address = "127.0.0.1";
-    int PORT = 10001;
     char *request_type;
     char *filename;
-    char command[512];
-    char buffer[BUFSIZE];
-    int bytes_received;
-    
+    int ports[MAX_N_SERVERS];
+    int n_ports;
+    int sock_fds[MAX_N_SERVERS];
+    int sock_fd;
+    int connected_servers = 0;
 
+    
     /* check command line arguments */
     if (argc != 3) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
     request_type = argv[1];
     filename = argv[2];
+
+    /* get ports from config file */
+    n_ports = get_ports(ports);
+
+    /* open a scoket per server */
+    for (int i = 0; i < n_ports; i++) {
+        if ((sock_fd = open_socket(ip_address, ports[i])) >= 0) {
+            sock_fds[connected_servers++] = sock_fd;
+        }
+    }
+
+    if (strcmp(request_type, "put") == 0) {
+        if (connected_servers < n_ports) {
+            printf("%s put failed\n", filename);
+            return 1;
+        }
+        put_request(sock_fds, filename, connected_servers);
+    } else if (strcmp(request_type, "get") == 0) {
+        get_request();
+    } else if (strcmp(request_type, "list") == 0) {
+        list_request();
+    } else {
+        printf("Request type not recognize, please choose between put, get or list\n");
+        return 1;
+    }
+    return 0;
+}
+
+
+int get_ports(int ports[10]) {
+    FILE *fp = fopen("dfc.conf", "r");
+    if (!fp) { printf("Error opening .conf file\n"); return 0; }
+
+    char line[256];
+    int i = 0;
+
+    while(fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "%*s %*s %*[^:]:%d", &ports[i])) {
+            i++;
+        }
+    }
+    fclose(fp);
+    return i;
+}
+
+
+int open_socket(char* ip, int port) {
+
+    struct sockaddr_in server_addr;
+    int client_fd;
 
     /* open socket */
     client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -55,227 +103,116 @@ int main(int argc, char **argv) {
 
     /* Set server address */
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
-    inet_pton(AF_INET, ip_address, &server_addr.sin_addr); // connect to localhost
+    server_addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &server_addr.sin_addr); // connect to localhost
 
     /* Connect to server */
     if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         printf("Error connecting socket. \n"); return -1;
     }
 
-    /* Create command */
-    snprintf(command, sizeof(command), "%s %s", request_type, filename);
-
-    /* send command */
-    send(client_fd, command, strlen(command), 0);
-
-    /* Receive response */
-    bytes_received = recv(client_fd, buffer, BUFSIZE-1, 0);
-    if (bytes_received > 0) {
-        printf("%s\n", buffer);
-    }
-    
-    close(client_fd);
-    return 1;
-
-
-    // /* gethostbyname: get the server's DNS entry */
-    // server = gethostbyname(hostname);
-    // if (server == NULL) {
-    //     fprintf(stderr,"ERROR, no such host as %s\n", hostname);
-    //     exit(0);
-    // }
-
-    // /* build the server's Internet address */
-    // bzero((char *) &serveraddr, sizeof(serveraddr));
-    // serveraddr.sin_family = AF_INET;
-    // bcopy((char *)server->h_addr, 
-	//   (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    // serveraddr.sin_port = htons(portno);
-
-    // /* get a message from the user */
-    // while(1) {
-    //     bzero(buf, BUFSIZE);
-    //     bzero(command, 7);
-    //     bzero(filename, 48);
-    //     printf("Please enter msg: ");
-    //     fgets(buf, BUFSIZE, stdin);
-
-    //     /* send the message to the server */
-    //     serverlen = sizeof(serveraddr);
-
-    //     /* Trim the inputs return/newline*/
-    //     buf[strcspn(buf, "\r\n")] = '\0';
-    //     words_read = sscanf(buf, "%6s %47s", command, filename); // Separate command and filename
-
-    //     if (strcmp(command, "exit") == 0) {
-    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-    //         if (n < 0) 
-    //         error("ERROR in sendto");
-    //         close(sockfd);
-    //         exit(0);
-    //     } else if (strcmp(command, "get") == 0) {
-
-    //         /* Check that file name was included with the command*/
-    //         if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
-
-    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-    //         if (n < 0) error("ERROR in sendto");
-
-    //         receive_file(filename, sockfd, serveraddr, serverlen);
-    //         continue;
-
-    //     } else if (strcmp(command, "put") == 0) {
-
-    //         /* Check that file name was included with the command*/
-    //         if (words_read < 2) { error("Error: No file name specified with delete command. \n"); }
-    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-    //         if (n < 0) error("ERROR in sendto");
-    //         send_file(filename, sockfd, serverlen, serveraddr);
-    //         continue;
-
-    //     } else {
-    //         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
-    //         if (n < 0) error("ERROR in sendto");
-    //     }
-
-    //     n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
-    //     if (n < 0) error("ERROR in recvfrom");
-    //     printf("Echo from server: %s", buf);
-    // }
-    // return 0;
+    return client_fd;
 }
 
 
+// int hash_filename(char *filename) {
+//     unsigned char digest[MD5_DIGEST_LENGTH]; // 16 bytes
+//     MD5((unsigned char *)filename, strlen(filename), digest);
+//     return digest[0] % 4; // use first byte for the modulus
+// }
 
-void receive_file(char* filename, int sockfd, struct sockaddr_in serveraddr, int serverlen) {
 
-    char buf[BUFSIZE+4];
-    int file_size;
-    int bytes_received  = 0;
-    int n;
-    uint32_t ack = 0;
-
-    /* Open and create file to write to it */
-    FILE* file = fopen(filename, "wb");
-    if (file == NULL) error("Error opening file to write");
-
-    n = recvfrom(sockfd, &file_size, sizeof(int), 0, &serveraddr, &serverlen);
-    if (n < 0) error("ERROR in recvfrom");
-    if (n != sizeof(int)) error("Did not receive correct file size");
-
-    /* Send acknowledge of the first packet*/
-    n = sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr *) &serveraddr, serverlen);
-    if (n < 0) error("ERROR in sendto");
-
-    while (file_size > bytes_received) {
-
-        /* Receive data */
-        n = recvfrom(sockfd, buf, BUFSIZE+4, 0, &serveraddr, &serverlen);
-        if (n < 0) error("ERROR in recvfrom");
-
-        /* Parse ack number and payload*/
-        uint32_t received_seq; memcpy(&received_seq, buf, 4);
-        char* payload = buf + 4;
-        int payload_size = n - 4;
-
-        /* If received seq is the same as previous discard the data and resend ack*/
-        if (received_seq <= ack) {
-            n = sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr *) &serveraddr, serverlen);
-            if (n < 0) error("ERROR in sendto");
-            continue;
-        }
-
-        /* Write to file*/
-        size_t bytes_written = fwrite(payload, 1, payload_size, file);
-        if ((int)bytes_written != n-4) error("Error writting file");
-        bytes_received += payload_size;
-
-        /* Send the acknowledge*/
-        ack = received_seq;
-        n = sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr *) &serveraddr, serverlen);
-        if (n < 0) error("ERROR in sendto");
-    }
-    fclose(file);
+unsigned long hash_filename(char *filename) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *filename++))
+        hash = ((hash << 5) + hash) + c;
+    return hash % 4;
 }
 
 
+void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 
+    /* variable declaration */
+    long f_size;
+    long part_size;
+    int bytes_read;
+    int total_bytes_read = 0;
+    int bytes_to_read;
+    int hash = 0;
+    char buffer[BUFSIZE];
+    char command[1024];
+    char header[1024];
+    int parts[2];
 
-
-
-
-void send_file(char* filename, int sockfd, int clientlen, struct sockaddr_in clientaddr) {
-  
-  int n;
-  uint32_t ack;
-  uint32_t expected_seq = 0;
-  char packet[BUFSIZE +4];
-
-
-  /* Open file */
-  FILE *file = fopen(filename, "rb");
-  if (file == NULL) error("ERROR opening file");
-
-  /* Get file size */
-  fseek(file, 0, SEEK_END);
-  int file_size = ftell(file);
-  fseek(file, 0, SEEK_SET);
-
-  /* Turn on timeout for the socket */
-  struct timeval tv = { .tv_sec = 0, .tv_usec = 4000};
-  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-  /* Send initial packet with the file size*/
-  while(1) {
-    n = sendto(sockfd, &file_size, sizeof(file_size), 0, (struct sockaddr *) &clientaddr, clientlen);
-    if (n < 0) error("ERROR in sendto");
-
-    n = recvfrom(sockfd, &ack, sizeof(ack), 0, &clientaddr, &clientlen);
-    if (n < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        continue; // no ACK arrived so retransmit
-      } else {
-        error("ERROR in recvfrom");
-      }
+    /* send put request pakcet */
+    sprintf(command, "put %s\n", filename);
+    for (int i = 0; i < n_servers; i++) {
+        send(sock_fds[i], command, strlen(command), 0);
     }
     
-    
-    if (ack == expected_seq) {
-      expected_seq++;
-      break;
-    }
-  }  
+    /* open file */
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) { printf("Error opening file\n"); return; }
 
-  size_t bytes_read;
-  char buf[BUFSIZE];
-  while ((bytes_read = fread(buf, 1, sizeof(buf), file)) > 0) {
+    /* get the file size and part size */
+    fseek(fp, 0, SEEK_END);
+    f_size = ftell(fp);
+    part_size = ceil((double)f_size / n_servers);
+    rewind(fp);
 
-    memcpy(packet, &expected_seq, sizeof(expected_seq));
-    memcpy(packet+4, buf, bytes_read);
+    /* hash filname */
+    hash = hash_filename(filename);
+    // hash = 3
 
-    while (1) {
-      n = sendto(sockfd, packet, bytes_read+4, 0, (struct sockaddr *) &clientaddr, clientlen);
-      if (n < 0) error("ERROR in sendto");
+    /* iterate over every server */
+    for (int i = 0; i < n_servers; i++) {
 
-      n = recvfrom(sockfd, &ack, sizeof(ack), 0, &clientaddr, &clientlen);
-      if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          continue; // no ACK arrived so retransmit
-        } else {
-          error("ERROR in recvfrom");
+        /* get parts for this server */
+        parts[0] = (i - hash + n_servers) % n_servers;
+        parts[1] = (parts[0] + 1) % n_servers;
+
+        printf("Server: %d; parts: (%d, %d)\n", i+1, parts[0], parts[1]);
+
+        for (int j =  0; j < 2; j++) {
+            long actual_size;
+            /* The last part will probably have a smaller size*/
+            if (parts[j] == n_servers  -1) {
+                actual_size = f_size - (n_servers -1) * part_size;
+            } else {
+                actual_size = part_size;
+            }
+
+            /* send header */
+            char *dot = strrchr(filename, '.'); // find the last '.'
+            if (dot) *dot = '\0';               // replace it with null terminator
+            sprintf(header, "%s_%d %ld\n", filename, parts[j]+1, actual_size);
+            send(sock_fds[i], header, strlen(header), 0);
+
+            /* seek to the part position */
+            fseek(fp, parts[j]*part_size, SEEK_SET);
+
+            /* chunk_size might be smaller than the buf size in first iteration */
+            bytes_to_read = fmin(actual_size, BUFSIZE);
+
+            /* Read until we reach EOF or bytes_to_read == 0 for current chunk */
+            while((bytes_read = fread(buffer, 1, bytes_to_read, fp)) > 0) {
+                send(sock_fds[i], buffer, bytes_read, 0); // Send the data
+                total_bytes_read += bytes_read;
+                bytes_to_read = fmin(actual_size - total_bytes_read, BUFSIZE); // next read is 4096 
+            }
+            total_bytes_read = 0;
         }
-      }
-
-      if (ack == expected_seq) {
-        expected_seq++;
-        break;
-      }
+        close(sock_fds[i]);
     }
-  }
-  fclose(file);
+    return;
+}
 
-  /* Turn of timeout for the socket */
-  struct timeval tv0 = { .tv_sec = 0, .tv_usec = 0};
-  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv0, sizeof(tv0));
+
+void get_request() {
+    return;
+}
+
+void list_request() {
+    return;
 }

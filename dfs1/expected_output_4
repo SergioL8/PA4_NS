@@ -1,0 +1,36 @@
+concurrent clients) ===
+    - (re)started dfs2 on port 10002
+    - (re)started dfs3 on port 10003
+    - (re)started dfs4 on port 10004
+---- Output from dfc1 ----
+------------------------------
+---- Output from dfc2 ----
+------------------------------
+---- Output from dfc3 ----
+------------------------------
+---- Output from dfc4 ----
+------------------------------
+    - dfc1/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc2/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc3/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc4/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - All four hashes match sample (+10 pts)
+
+==== RESULT (Test 1) ====
+Score: 50 / 50
+
+==== RESULT (Test 2) ====
+Score: 20 / 20
+
+==== RESULT (Test 3) ====
+Score: 20 / 20
+
+==== RESULT (Test 4) ====
+Score: 10 / 10
+
+==== RESULT (Test 5) ====
+Score: 10 / 10
+
+==== TOTAL ====
+Total Score: 110 / 110
+[*] Stopping servers ...

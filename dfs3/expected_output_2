@@ -1,0 +1,26 @@
+3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
+[*] Checking server piece counts (Test 1) ...
+    - dfs1: 4 files
+    - dfs2: 4 files
+    - dfs3: 4 files
+    - dfs4: 4 files
+[*] Running './dfc list' (Test 1) ...
+---- ./dfc list output (Test 1) ----
+apple_ex.png
+wine3.jpg
+---------------------------------
+    - List shows both files (+10 pts)
+
+=== Test 2: 3 servers (terminate server 4) ===
+[*] Terminating dfs4 ...
+    - dfs4 terminated
+[*] Running './dfc list' (Test 2) ...
+---- ./dfc list output (Test 2) ----
+apple_ex.png
+wine3.jpg
+---------------------------------
+[*] Downloading (GET) ...
+[*] Checking hashes (Test 2)...
+    - wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
