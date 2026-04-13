@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 
     
     /* check command line arguments */
-    if (argc < 3) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
+    if (argc < 2) { fprintf(stderr,"usage: %s <command> <filename>\n", argv[0]); return -1; }
     request_type = argv[1];
     filename = (argc >= 3) ? argv[2] : NULL;
 
@@ -176,6 +176,12 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     /* hash filname */
     hash = hash_filename(filename);
 
+    /* clean string */
+    char *base = strrchr(filename, '/');
+    base = base ? base + 1 : filename;
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = '\0';
+
     /* iterate over every server */
     for (int i = 0; i < n_servers; i++) {
 
@@ -194,14 +200,8 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
                 actual_size = part_size;
             }
 
-            /* clean string */
-            char *dot = strrchr(filename, '.'); // find the last '.'
-            if (dot) *dot = '\0';               // replace it with null terminator
-            char *base = strrchr(filename, '/');
-            base = base ? base +1 : filename;
-
             /* send header */
-            sprintf(header, "%s_%d %ld\n", filename, parts[j]+1, actual_size);
+            sprintf(header, "%s_%d %ld\n", base, parts[j]+1, actual_size);
             send(sock_fds[i], header, strlen(header), 0);
 
             /* seek to the part position */
