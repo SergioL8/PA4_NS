@@ -24,6 +24,7 @@ void *handle_client_thread(void *arg);
 void put_request(int client_fd, char* server_dir);
 void get_request(int client_fd, char* server_dir, char* filename);
 int recv_line(int fd, char *buf, int maxlen);
+void list_request(int client_fd, char* server_dir);
 
 
 int main(int argc, char **argv) {
@@ -134,8 +135,7 @@ void *handle_client_thread(void *arg) {
     } else if (strcmp(command, "get") == 0) {
         get_request(client_fd, server_dir, filename);
     } else if (strcmp(command, "list") == 0) {
-        char *body = "Command received is list\n";
-        send(client_fd, body, strlen(body), 0); // Send response
+        list_request(client_fd, server_dir);
     } else {
         char *body = "Error 400. Command not supported.\n";
         send(client_fd, body, strlen(body), 0); // Send response
@@ -194,7 +194,6 @@ void put_request(int client_fd, char* server_dir) {
 }
 
 
-
 void get_request(int client_fd, char* server_dir, char* filename) {
 
     /* variable declaration */
@@ -233,8 +232,27 @@ void get_request(int client_fd, char* server_dir, char* filename) {
             while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
                 send(client_fd, buffer, bytes_read, 0);
             }
-            flcose(fp);
+            // flcose(fp);
         }
     }
     closedir(dir);
+}
+
+
+void list_request(int client_fd, char* server_dir) {
+
+    /* open directory*/
+    DIR *dir = opendir(server_dir);
+    if (!dir) { printf("Error opening directory: %s\n", server_dir); return; }
+
+    /* loop over the directory */
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;  // skip "." and ".."
+
+        char line[512];
+        sprintf(line, "%s\n", entry->d_name);
+        printf("Line: %s\n", line);
+        send(client_fd, line, strlen(line), 0);
+    }
 }

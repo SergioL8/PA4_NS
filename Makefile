@@ -1,8 +1,8 @@
 all: dfc dfs
 
 dfc: dfc.c # dfc_maps.c
-	gcc -Wall -Wextra -o dfc dfc.c -lssl -lcrypto -lm
-# 	gcc -Wall -Wextra -o dfc dfc.c
+# 	gcc -Wall -Wextra -o dfc dfc.c -lssl -lcrypto -lm
+	gcc -Wall -Wextra -o dfc dfc.c
 
 dfs: dfs.c
 	gcc -Wall -Wextra -o dfs dfs.c
@@ -13,3 +13,4 @@ clean:
 	rm -rf dfs2/*
 	rm -rf dfs3/*
 	rm -rf dfs4/*
+	killall dfs

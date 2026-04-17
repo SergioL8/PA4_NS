@@ -24,10 +24,16 @@ int get_ports(int ports[MAX_N_SERVERS]);
 void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
 int open_socket(char* ip, int port);
 void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
-void list_request();
+void list_request(int sock_fds[MAX_N_SERVERS], int n_servers);
 // int hash_filename(char *filename);
 unsigned long hash_filename(char *filename);
 int recv_line(int fd, char *buf, int maxlen);
+
+
+typedef struct {
+    char name[256];
+    int parts_seen[10];
+} FileRecord;
 
 
 int main(int argc, char **argv) {
@@ -64,7 +70,8 @@ int main(int argc, char **argv) {
     } else if (strcmp(request_type, "get") == 0) {
         get_request(sock_fds, filename, connected_servers);
     } else if (strcmp(request_type, "list") == 0) {
-        list_request();
+        printf("In list if statement \n");
+        list_request(sock_fds, connected_servers);
     } else {
         printf("Request type not recognize, please choose between put, get or list\n");
         return 1;
@@ -300,6 +307,67 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     return;
 }
 
-void list_request() {
-    return;
+
+void list_request(int sock_fds[MAX_N_SERVERS], int n_servers) {
+
+    /* variable declaration */
+    char filename[128];
+    int bytes;
+    FileRecord files[100];
+    int file_count = 0;
+
+    /* send list request to the servers */
+    char *command = "list\n";
+    for (int i = 0; i < n_servers; i++) {
+        send(sock_fds[i], command, strlen(command), 0);
+    }
+
+    /* receive file names from each server */
+    for (int i = 0; i < n_servers; i++) {
+        while((bytes = recv_line(sock_fds[i], filename, sizeof(filename))) > 0) {
+
+            /* separate the part number of the file */
+            char *underscore = strrchr(filename, '_');
+            if (!underscore) continue;
+
+            /* get the part number */
+            int part_num = atoi(underscore + 1);
+            *underscore = '\0';
+
+            /* find the file name in the file records*/
+            int idx = -1;
+            for (int j = 0; j < file_count; j++) { // loop over all records stored
+                if (strcmp(files[j].name, filename) == 0) { // if filename matches a record store the idx
+                    idx = j;
+                    break;
+                }
+            }
+
+            /* store a file that has not been recorded before */
+            if (idx == -1) {
+                idx = file_count++;
+                strncpy(files[idx].name, filename, sizeof(files[idx].name));
+                memset(files[idx].parts_seen, 0, sizeof(files[idx].parts_seen));
+            }
+
+            /* set the part of this file to stored */
+            files[idx].parts_seen[part_num] = 1;
+        }
+
+        /* print results */
+        for (int i = 0; i < file_count; i++) {
+            int complete = 1;
+            for (int j = 1; j <= n_servers; j++) { // check every part of the file is there
+                if (!files[i].parts_seen[j]) { // if any part is missing set the complete to false
+                    complete = 0;
+                    break;
+                }
+            }
+            if (complete) {
+                printf("%s\n", files[i].name);
+            } else {
+                printf("%s [incomplete]\n", files[i].name);
+            }
+        }
+    }
 }
