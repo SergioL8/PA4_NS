@@ -23,8 +23,8 @@
 int get_ports(int ports[MAX_N_SERVERS]);
 void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
 int open_socket(char* ip, int port);
-void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers);
-void list_request(int sock_fds[MAX_N_SERVERS], int n_servers);
+void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers, int n_ports);
+void list_request(int sock_fds[MAX_N_SERVERS], int n_servers, int n_ports);
 // int hash_filename(char *filename);
 unsigned long hash_filename(char *filename);
 int recv_line(int fd, char *buf, int maxlen);
@@ -68,10 +68,9 @@ int main(int argc, char **argv) {
         if (connected_servers < n_ports) { printf("%s put failed\n", filename); return 1; }
         put_request(sock_fds, filename, connected_servers);
     } else if (strcmp(request_type, "get") == 0) {
-        get_request(sock_fds, filename, connected_servers);
+        get_request(sock_fds, filename, connected_servers, n_ports);
     } else if (strcmp(request_type, "list") == 0) {
-        printf("In list if statement \n");
-        list_request(sock_fds, connected_servers);
+        list_request(sock_fds, connected_servers, n_ports);
     } else {
         printf("Request type not recognize, please choose between put, get or list\n");
         return 1;
@@ -186,8 +185,8 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
     /* clean string */
     char *base = strrchr(filename, '/');
     base = base ? base + 1 : filename;
-    char *dot = strrchr(base, '.');
-    if (dot) *dot = '\0';
+    // char *dot = strrchr(base, '.');
+    // if (dot) *dot = '\0';
 
     /* iterate over every server */
     for (int i = 0; i < n_servers; i++) {
@@ -231,7 +230,7 @@ void put_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 }
 
 
-void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
+void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers, int n_ports) {
 
     /* variable declaration */
     char command[1024];
@@ -277,13 +276,29 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
         close(sock_fds[i]);
     }
 
+    /* check if all parts are available to reconstruct the file */
+    char base_check[256];
+    strncpy(base_check, base, sizeof(base_check));
+    // char *dot_check = strrchr(base_check, '.');
+    // if (dot_check) *dot_check = '\0';
+    for (int k = 1; k <= n_ports; k++) {
+        char check_name[256];
+        sprintf(check_name, "%s_%d", base_check, k);
+        FILE *check = fopen(check_name, "rb");
+        if (!check) {
+            printf("%s is incomplete\n", base);
+            return;
+        }
+        fclose(check);
+    }
+
     /* create final file */
     FILE *fp = fopen(base, "wb");
     if (!fp) { printf("Error opening main final file: %s\n", filename); return; }
 
     /* strip extension from filename */
-    char *dot = strrchr(base, '.'); // find the last '.'
-    if (dot) *dot = '\0';
+    // char *dot = strrchr(base, '.'); // find the last '.'
+    // if (dot) *dot = '\0';
 
     for (int j = 1; ; j++) {
 
@@ -308,7 +323,7 @@ void get_request(int sock_fds[MAX_N_SERVERS], char *filename, int n_servers) {
 }
 
 
-void list_request(int sock_fds[MAX_N_SERVERS], int n_servers) {
+void list_request(int sock_fds[MAX_N_SERVERS], int n_servers, int n_ports) {
 
     /* variable declaration */
     char filename[128];
@@ -354,20 +369,28 @@ void list_request(int sock_fds[MAX_N_SERVERS], int n_servers) {
             files[idx].parts_seen[part_num] = 1;
         }
 
-        /* print results */
-        for (int i = 0; i < file_count; i++) {
-            int complete = 1;
-            for (int j = 1; j <= n_servers; j++) { // check every part of the file is there
-                if (!files[i].parts_seen[j]) { // if any part is missing set the complete to false
-                    complete = 0;
-                    break;
-                }
+        // for (int i = 0; i < file_count; i++) {
+        //     printf("File %s | Parts ", files[i].name);
+        //     for (int j = 1; j < n_servers; j++) {
+        //         printf("%d:%d ", j, files[i].parts_seen[j]);
+        //     }
+        //     printf("\n");
+        // }
+    }
+
+    /* print results */
+    for (int i = 0; i < file_count; i++) {
+        int complete = 1;
+        for (int j = 1; j <= n_ports; j++) { // check every part of the file is there
+            if (!files[i].parts_seen[j]) { // if any part is missing set the complete to false
+                complete = 0;
+                break;
             }
-            if (complete) {
-                printf("%s\n", files[i].name);
-            } else {
-                printf("%s [incomplete]\n", files[i].name);
-            }
+        }
+        if (complete) {
+            printf("%s\n", files[i].name);
+        } else {
+            printf("%s [incomplete]\n", files[i].name);
         }
     }
 }

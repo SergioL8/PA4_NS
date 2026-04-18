@@ -204,8 +204,8 @@ void get_request(int client_fd, char* server_dir, char* filename) {
     long bytes_read = 0;
 
     /* remove extension */
-    char *dot = strrchr(filename, '.'); // find the last '.'
-    if (dot) *dot = '\0';               // replace it with null terminator
+    // char *dot = strrchr(filename, '.'); // find the last '.'
+    // if (dot) *dot = '\0';               // replace it with null terminator
 
     /* open directory*/
     DIR *dir = opendir(server_dir);
