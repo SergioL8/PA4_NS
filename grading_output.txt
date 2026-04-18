@@ -1,0 +1,152 @@
+=== Prepare Test Environment ===
+[*] Current working directory: /home/student/Desktop/PA4_NS
+[*] Cleaning up any existing processes bound to target ports ...
+[*] Building project (make clean && make) ...
+    - Build OK
+[*] Clearing dfs directories ...
+    - /home/student/Desktop/PA4_NS/dfs1 ready
+    - /home/student/Desktop/PA4_NS/dfs2 ready
+    - /home/student/Desktop/PA4_NS/dfs3 ready
+    - /home/student/Desktop/PA4_NS/dfs4 ready
+[*] Wrote dfc.conf:
+server dfs1 127.0.0.1:10005
+server dfs2 127.0.0.1:10006
+server dfs3 127.0.0.1:10007
+server dfs4 127.0.0.1:10008
+
+[*] Starting servers ...
+    - Started dfs1 on port 10005
+    - Started dfs2 on port 10006
+    - Started dfs3 on port 10007
+    - Started dfs4 on port 10008
+[*] Ensuring sample files ...
+
+
+=== Test 1: 4 servers ===
+[*] Uploading (PUT) ...
+Server: 1; parts: (0, 1)
+Server: 2; parts: (1, 2)
+Server: 3; parts: (2, 3)
+Server: 4; parts: (3, 0)
+Server: 1; parts: (0, 1)
+Server: 2; parts: (1, 2)
+Server: 3; parts: (2, 3)
+Server: 4; parts: (3, 0)
+[*] Downloading (GET) ...
+Error opening part file: wine3.jpg_5
+Error opening part file: apple_ex.png_5
+[*] Checking hashes (Test 1)...
+    - wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
+[*] Checking server piece counts (Test 1) ...
+    - dfs1: 4 files
+    - dfs2: 4 files
+    - dfs3: 4 files
+    - dfs4: 4 files
+[*] Running './dfc list' (Test 1) ...
+---- ./dfc list output (Test 1) ----
+apple_ex.png
+wine3.jpg
+---------------------------------
+    - List shows both files (+10 pts)
+
+=== Test 2: 3 servers (terminate server 4) ===
+[*] Terminating dfs4 ...
+    - dfs4 terminated
+[*] Running './dfc list' (Test 2) ...
+---- ./dfc list output (Test 2) ----
+Error connecting socket. 
+apple_ex.png
+wine3.jpg
+---------------------------------
+[*] Downloading (GET) ...
+Error connecting socket. 
+Error opening part file: wine3.jpg_5
+Error connecting socket. 
+Error opening part file: apple_ex.png_5
+[*] Checking hashes (Test 2)...
+    - wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
+
+=== Test 3: 2 servers (terminate server 2) ===
+[*] Terminating dfs2 ...
+    - dfs2 terminated
+[*] Running './dfc list' (Test 3) ...
+---- ./dfc list output (Test 3) ----
+Error connecting socket. 
+Error connecting socket. 
+apple_ex.png
+wine3.jpg
+---------------------------------
+[*] Downloading (GET) ...
+Error connecting socket. 
+Error connecting socket. 
+Error opening part file: wine3.jpg_5
+Error connecting socket. 
+Error connecting socket. 
+Error opening part file: apple_ex.png_5
+[*] Checking hashes (Test 3)...
+    - wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d vs 6bc3b2fc3038ca49203809b6c398e17d
+    - apple_ex.png: dc3110d1eeb1322f90df8c97eda30e43 vs dc3110d1eeb1322f90df8c97eda30e43
+
+=== Test 4: 1 server (terminate server 3) ===
+[*] Terminating dfs3 ...
+    - dfs3 terminated
+[*] Running './dfc list' (Test 4) (expect <filename> [incomplete]) ...
+---- ./dfc list output (Test 4) ----
+Error connecting socket. 
+Error connecting socket. 
+Error connecting socket. 
+apple_ex.png [incomplete]
+wine3.jpg [incomplete]
+---------------------------------
+[*] Attempting GET under 1-server scenario (expect '<filename> is incomplete') ...
+Error connecting socket. 
+Error connecting socket. 
+Error connecting socket. 
+wine3.jpg is incomplete
+Error connecting socket. 
+Error connecting socket. 
+Error connecting socket. 
+apple_ex.png is incomplete
+
+=== Test 5: Multiple DFCs (4 concurrent clients) ===
+    - (re)started dfs2 on port 10006
+    - (re)started dfs3 on port 10007
+    - (re)started dfs4 on port 10008
+---- Output from dfc1 ----
+Error opening part file: wine3.jpg_5
+------------------------------
+---- Output from dfc2 ----
+Error opening part file: wine3.jpg_5
+------------------------------
+---- Output from dfc3 ----
+Error opening part file: wine3.jpg_5
+------------------------------
+---- Output from dfc4 ----
+Error opening part file: wine3.jpg_5
+------------------------------
+    - dfc1/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc2/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc3/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - dfc4/wine3.jpg: 6bc3b2fc3038ca49203809b6c398e17d
+    - All four hashes match sample (+10 pts)
+
+==== RESULT (Test 1) ====
+Score: 50 / 50
+
+==== RESULT (Test 2) ====
+Score: 20 / 20
+
+==== RESULT (Test 3) ====
+Score: 20 / 20
+
+==== RESULT (Test 4) ====
+Score: 10 / 10
+
+==== RESULT (Test 5) ====
+Score: 10 / 10
+
+==== TOTAL ====
+Total Score: 110 / 110
+[*] Stopping servers ...
